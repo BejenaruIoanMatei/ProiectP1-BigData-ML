@@ -1,0 +1,7 @@
+.venv/
+mongo_data/
+postgres/data/
+.env
+__pycache__/
+*.pyc
+.git/
