@@ -9,3 +9,6 @@ __pycache__
 
 ## postgres
 postgres/
+
+##mongo
+mongo_data/*
