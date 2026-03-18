@@ -2,6 +2,13 @@ todo.todo
 
 ## python venv
 .venv
+__pycache__
 
 ## env 
 .env
+
+## postgres
+postgres/
+
+##mongo
+mongo_data/*
