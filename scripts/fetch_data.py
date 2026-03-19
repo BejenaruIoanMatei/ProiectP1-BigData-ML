@@ -1,4 +1,6 @@
+import requests
+
 def fetch_data():
-    return {
-        "Info": [1, 2, 3]
-    }
+    print("Fetching data...")
+    users_data = requests.get('https://dummyjson.com/users?limit=50').json()['users']
+    return users_data
