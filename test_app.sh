@@ -3,4 +3,4 @@
 # chmod +x test_app.sh
 
 echo "Testing python scripts..."
-docker compose exec app python scripts/insert_records.py
+docker compose exec app python scripts/test_connection.py
