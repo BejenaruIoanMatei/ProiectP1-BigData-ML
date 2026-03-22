@@ -32,3 +32,29 @@ having
     round(avg(rating), 2) > 4.0 
     and count(*) >= 2
 order by avg_rating desc;
+
+-- 3. Cat de agresive sunt reducerile ? 
+--pentru fiecare cart -> valoarea economisita (dif dintre total si discounted_total)
+
+select
+    c.id,
+    u.email,
+    (c.total - c.discounted_total) as dif_discount
+from
+    dev.users u
+inner join dev.carts c on u.id = c.user_id
+where u.first_name <> 'Unknown'
+order by dif_discount desc;
+
+-- 4. Cate produse "fantoma" sunt ?
+--produsele care nu au fost adaugate niciodata in
+--niciun cart
+
+select 
+    p.id,
+    p.title,
+    ci.product_id
+from 
+    dev.products p
+left join dev.cart_items ci on p.id = ci.product_id
+where ci.product_id is null;
