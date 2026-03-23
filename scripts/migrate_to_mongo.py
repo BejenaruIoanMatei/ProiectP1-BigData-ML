@@ -56,13 +56,13 @@ def migrate():
 
     print("Migrating carts with embedded items and user info...")
     pg_cur.execute("""
-        SELECT c.id, c.total, u.first_name, u.last_name, u.email 
+        SELECT c.id, c.total, c.discounted_total, u.first_name, u.last_name, u.email 
         FROM carts c 
         JOIN users u ON c.user_id = u.id
     """)
     carts = pg_cur.fetchall()
 
-    for c_id, total, f_name, l_name, email in carts:
+    for c_id, total, discounted_total, f_name, l_name, email in carts:
         pg_cur.execute("""
             SELECT p.title, ci.quantity, ci.price 
             FROM cart_items ci
@@ -81,6 +81,7 @@ def migrate():
             {"$set": {
                 "customer": {"name": f"{f_name} {l_name}", "email": email},
                 "total_price": float(total),
+                "discounted_total": float(discounted_total),
                 "items": items_list
             }},
             upsert=True
