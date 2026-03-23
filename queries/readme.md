@@ -60,6 +60,7 @@ erDiagram
     ORDERS {
         int cart_id PK
         float total_price
+        float discounted_total
         object customer "Embedded Document (Name, Email)"
         array items "Vector: [ {prod_name, qty, price}, ... ]"
     }

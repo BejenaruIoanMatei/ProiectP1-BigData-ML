@@ -30,3 +30,53 @@ db.products_catalog.aggregate([
     },
     { $sort: { avgRating: -1}}
 ]);
+
+// 3. Cat de agresive sunt reducerile ?
+//pentru fiecare cart -> valoarea economisita (dif dintre 
+//total si discounted)
+use('big_data_db');
+db.orders.aggregate([
+    { $addFields: 
+        {
+            dif_discount: { $subtract: ["$total_price", "$discounted_total"]}
+        }
+    },
+    {
+        $match:
+        {
+            dif_discount: { $gt: 50}
+        }
+    },
+    { $project:
+        {
+            "customer.email":1,
+            dif_discount:1,
+            _id:0
+        }
+    }
+]);
+
+// 4. Cate produse "fantoma" sunt ?
+//fantoma = produsele care nu au fost adaugate niciodata
+//in niciun cart
+use('big_data_db');
+db.products_catalog.aggregate([
+    { $lookup:
+        {
+            from: "orders",
+            localField: "title",
+            foreignField: "items.product_name",
+            as: "pc_o"
+        }
+    },
+    { $match:
+        {
+            pc_o: { $size: 0}
+        }
+    },
+    { $project:
+        {
+            title:1
+        }
+    }
+]);
