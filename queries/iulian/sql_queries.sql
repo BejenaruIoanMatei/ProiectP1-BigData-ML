@@ -50,18 +50,17 @@ WHERE
 ORDER BY
     r.rating ASC, r.date DESC;
 
--- Clienti inactivi (fara niciun cart)
+-- Care sunt cele mai "vânate" produse?
 SELECT
-    u.id,
-    u.first_name,
-    u.last_name,
-    u.email
+    p.title AS produs,
+    SUM(ci.quantity) AS total_unitati_vandute,
+    ROUND(SUM(ci.quantity * ci.price), 2) AS venit_generat
 FROM
-    dev.users u
-LEFT JOIN dev.carts c ON u.id = c.user_id
-WHERE
-    c.id IS NULL
-    AND u.first_name <> 'Unknown'
+    dev.products p
+INNER JOIN
+    dev.cart_items ci ON p.id = ci.product_id
+GROUP BY
+    p.id, p.title
 ORDER BY
-    u.last_name;
-
+    total_unitati_vandute DESC
+LIMIT 5;

@@ -1,130 +1,126 @@
 
-
 // Top 5 produse dupa pret si rating mediu
 use('big_data_db');
 db.products_catalog.aggregate([
-  { $lookup: {
-      from: "reviews",
-      localField: "_id",
-      foreignField: "product_id",
-      as: "reviews"
+  { $addFields: {
+    avg_rating: {
+      $round: [
+        { $avg: "$reviews.rating" },
+        2
+      ]
+    },
+    nr_recenzii: {
+      $size: "$reviews"
+    }
   }},
   { $match: {
-      "reviews.0": { $exists: true }
-  }},
-  { $addFields: {
-      avg_rating: {
-        $round: [
-          { $avg: "$reviews.rating" },
-          2
-        ]
-      },
-      nr_recenzii: { $size: "$reviews" }
+    nr_recenzii: { $gte: 1 }
   }},
   { $sort: {
-      price: -1,
-      avg_rating: -1
+    price: -1,
+    avg_rating: -1
   }},
   { $limit: 5 },
   { $project: {
-      _id: 0,
-      title: 1,
-      price: 1,
-      avg_rating: 1,
-      nr_recenzii: 1
+    _id: 0,
+    title: 1, price: 1,
+    avg_rating: 1,
+    nr_recenzii: 1
   }}
 ]);
 
-// Cati utilizatori au cumparat cel mai mare numar de produse unice
+// Utilizatori cu cele mai multe produse unice cumparate
 use('big_data_db');
-db.users.aggregate([
+db.orders.aggregate([
   { $match: {
-      first_name: { $ne: "Unknown" }
-  }},
-  { $lookup: {
-      from: "carts",
-      localField: "_id",
-      foreignField: "user_id",
-      as: "carts"
-  }},
-  { $unwind: "$carts" },
-  { $lookup: {
-      from: "cart_items",
-      localField: "carts._id",
-      foreignField: "cart_id",
-      as: "items"
+    "customer.name": {
+      $ne: "Unknown User"
+    }
   }},
   { $unwind: "$items" },
   { $group: {
-      _id: "$_id",
-      first_name: { $first: "$first_name" },
-      last_name:  { $first: "$last_name"  },
-      email:      { $first: "$email"      },
-      produse_unice: {
-        $addToSet: "$items.product_id"
-      }
+    _id: "$customer.email",
+    name: {
+      $first: "$customer.name"
+    },
+    produse_unice: {
+      $addToSet:
+        "$items.product_name"
+    }
   }},
   { $addFields: {
-      produse_unice: {
-        $size: "$produse_unice"
-      }
+    nr_produse_unice: {
+      $size: "$produse_unice"
+    }
   }},
-  { $sort: { produse_unice: -1 }},
+  { $sort: {
+    nr_produse_unice: -1
+  }},
   { $limit: 10 },
   { $project: {
-      _id: 0,
-      first_name: 1, last_name: 1,
-      email: 1, produse_unice: 1
+    _id: 0,
+    name: 1,
+    email: "$_id",
+    nr_produse_unice: 1
   }}
 ]);
 
-// Recenzenti nemultumiti si produsele pe care le-au recenzat
+// Recenzenti nemultumiti (rating ≤ 2)
 use('big_data_db');
-db.reviews.aggregate([
+db.products_catalog.aggregate([
+  { $unwind: "$reviews" },
   { $match: {
-      rating: { $lte: 2 }
+    "reviews.rating": {
+      $lte: 2
+    }
   }},
-  { $lookup: {
-      from: "products_catalog",
-      localField: "product_id",
-      foreignField: "_id",
-      as: "product"
-  }},
-  { $unwind: "$product" },
   { $sort: {
-      rating: 1,
-      date: -1
+    "reviews.rating": 1
   }},
   { $project: {
-      _id: 0,
-      reviewer_name: 1,
-      produs: "$product.title",
-      rating: 1,
-      comment: 1,
-      date: 1
+    _id: 0,
+    produs: "$title",
+    recenzent: "$reviews.user",
+    rating: "$reviews.rating",
+    comentariu: "$reviews.comment"
   }}
 ]);
 
-// Utilizatori care nu au creat niciodata un cart
+// Clienti inactivi (fara niciun cart)
 use('big_data_db');
-db.users.aggregate([
-  { $match: {
-      first_name: { $ne: "Unknown" }
-  }},
-  { $lookup: {
-      from: "carts",
-      localField: "_id",
-      foreignField: "user_id",
-      as: "carts"
-  }},
-  { $match: {
-      carts: { $size: 0 }
-  }},
-  { $sort: { last_name: 1 }},
-  { $project: {
-      _id: 1,
-      first_name: 1,
-      last_name: 1,
-      email: 1
-  }}
+db.products_catalog.aggregate([
+    { $lookup: {
+        from: "orders",
+        localField: "title",
+        foreignField: "items.product_name",
+        as: "comenzi"
+    }},
+    { $match: {
+        comenzi: { $size: 0 }
+    }},
+    { $project: {
+        _id: 0,
+        title: 1,
+        price: 1
+    }}
+]);
+
+// Care sunt cele mai "vânate" produse?
+use('big_data_db');
+db.orders.aggregate([
+    { $unwind: "$items" },
+    { $group: {
+        _id: "$items.product_name", 
+        total_unitati_vandute: { $sum: "$items.quantity" },
+        venit_total_produs: { $sum: { $multiply: ["$items.quantity", "$items.unit_price"] } },
+        numar_aparitii_in_carturi: { $sum: 1 }
+    }},
+    { $sort: { total_unitati_vandute: -1 } },
+    { $limit: 5 },
+    { $project: {
+        _id: 0,
+        produs: "$_id",
+        total_unitati_vandute: 1,
+        venit_generat: { $round: ["$venit_total_produs", 2] }
+    }}
 ]);
