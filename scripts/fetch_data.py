@@ -6,6 +6,9 @@ def fetch_data():
     carts_data = requests.get('https://dummyjson.com/carts').json()['carts']
     products_data = requests.get('https://dummyjson.com/products?limit=100').json()['products']
     
+    print("Generating mock data...")
+    
+    
     return {
         "users_data": users_data,
         "carts_data": carts_data,
