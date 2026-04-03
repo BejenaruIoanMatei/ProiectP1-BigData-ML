@@ -171,19 +171,66 @@ Mongo diagram:
 
 ```mermaid
 erDiagram
-    ORDERS {
-        int cart_id PK
-        float total_price
-        float discounted_total
-        object customer "Embedded Document (Name, Email)"
-        array items "Vector: [ {prod_name, qty, price}, ... ]"
-    }
-    PRODUCTS_CATALOG {
-        int product_id PK
-        string title
-        float price
-        array reviews "Vector: [ {rating, comment, user}, ... ]"
+
+    USERS {
+        objectId _id PK
+        string first_name
+        string last_name
+        string email
+        string password_hash
+        timestamp created_at
+        array addresses "Vector: [{street, city, postal_code, country, is_default}]"
     }
 
-    ORDERS ||--o{ PRODUCTS_CATALOG : "references (denormalized)"
+    PRODUCTS {
+        objectId _id PK
+        string title
+        decimal price
+        array reviews "Vector: [{user_id, rating, comment, date}]"
+        array inventory "Vector: [{warehouse_id, stock_level, reserved_quantity, min_stock_level}]"
+    }
+
+    CARTS {
+        objectId _id PK
+        objectId user_id FK
+        timestamp updated_at
+        array items "Vector: [{product_id, title, price, quantity}]"
+    }
+
+    ORDERS {
+        objectId _id PK
+        objectId user_id FK
+        objectId cart_id FK
+        object delivery_address "Snapshot: {street, city, postal_code, country}"
+        decimal total
+        decimal discounted_total
+        enum status "pending, paid, cancelled, shipped, delivered"
+        timestamp created_at
+        array items "Vector: [{product_id, title, quantity, price}]"
+        object payment "Embedded: {amount, method, transaction_id, status, paid_at}"
+        object shipment "Embedded: {courier_id, warehouse_id, tracking_number, created_at, items[], status_history[]}"
+    }
+
+    COURIERS {
+        objectId _id PK
+        string full_name
+        string phone
+        enum vehicle_type "bike, car, van, truck"
+        object company "Denormalizat: {name, contact_email}"
+    }
+
+    WAREHOUSES {
+        objectId _id PK
+        string name
+        string city
+        string address
+    }
+
+    USERS ||--o{ CARTS : "has"
+    USERS ||--o{ ORDERS : "places"
+    PRODUCTS ||--o{ CARTS : "referenced in items[]"
+    PRODUCTS ||--o{ ORDERS : "referenced in items[]"
+    COURIERS ||--o{ ORDERS : "referenced in shipment"
+    WAREHOUSES ||--o{ ORDERS : "referenced in shipment"
+    WAREHOUSES ||--o{ PRODUCTS : "referenced in inventory[]"
 ```
