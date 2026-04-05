@@ -1,82 +1,130 @@
-// 1. Top 5 utilizatori care au cheltuit cele mai mari sume de bani
-use('big_data_db');
+// 1. Top 5 utilizatori care au cheltuit cele mai mari sume de bani in total
+db.orders.find({});
 db.orders.aggregate([
-    { $match: { "customer.name": { $ne: "Unknown User"} } },
-    { $group: {
-        _id: "$customer.email",
-        totalSpent: { $sum: "$total_price"},
-        name: { $first: "$customer.name"}
-    }},
-    { $sort: { totalSpent: -1}},
-    { $limit: 5}
-]);
-
-// 2. Toate produsele care au o medie a rating ului mai mare
-//de 4.0 si care au cel putin 2 review uri
-use('big_data_db');
-db.products_catalog.aggregate([
-    { $project: 
+    { $lookup: 
         {
-            title: 1,
-            avgRating: { $avg: "$reviews.rating"},
-            numReviews: { $size: "$reviews"}
+            from: "users",
+            localField: "user_id",
+            foreignField: "_id",
+            as: "user"
         }
     },
+    { $unwind: "$user"},
     { $match: 
         {
-            avgRating: { $gt: 4.0},
-            numReviews: { $gte: 2}
+            "user.first_name": { $ne: "Unknown"}
         }
     },
-    { $sort: { avgRating: -1}}
+    { $group:
+        {
+            _id: "$user_id",
+            first_name: { $first: '$user.first_name'},
+            last_name: { $first: "$user.last_name"},
+            total_cheltuit: { $sum: "$discounted_total"}
+        }
+    },
+    { $sort: { total_cheltuit: -1 }},
+    { $limit: 5},
+    { $project: 
+        {
+            _id: 0,
+            first_name: 1,
+            last_name: 1,
+            total_cheltuit: { $round: ["$total_cheltuit", 2]}
+        }
+    }
 ]);
+//-- 2. Pentru fiecare produs sa se calculeze
+//--a) Valoarea totala vanduta
+//--b) Ratingul mediu din recenzii
+//--c) Stocul total disponibil
+//--sumat pe toate depozitele.
 
-// 3. Cat de agresive sunt reducerile ?
-//pentru fiecare cart -> valoarea economisita (dif dintre 
-//total si discounted)
-use('big_data_db');
+//-- Pe baza lor sa clasific:
+//--a) 'premium' daca avg_rating >= 4.5 si valoarea_vanduta >= 500 
+//--b) 'standard' daca avg_rating >= 3.5 sau valoarea_vanduta >= 200
+//--c) 'slab' restul
+//
+//-- Se afiseaza doar produsele cu cel putin o recenzie si cel putin o vanzare
+//-- Sortat dupa clasificare si valoarea vanduta descrescator
+
 db.orders.aggregate([
-    { $addFields: 
+    { $unwind: "$items"},
+    { $group: 
         {
-            dif_discount: { $subtract: ["$total_price", "$discounted_total"]}
+            _id: "$items.product_id",
+            title: { $first: "$items.title"},
+            valoare_vanduta: {
+                $sum: { $multiply: ["$items.quantity", "$items.price"]}
+            }
         }
     },
-    {
-        $match:
+    { $lookup: 
         {
-            dif_discount: { $gt: 50}
+            from: "products",
+            localField: "_id",
+            foreignField: "_id",
+            as: "product"
         }
     },
-    { $project:
+    { $unwind: "$product"},
+    { $match: { "product.reviews.0": { $exists: true}}},
+    { $addFields: {
+        avg_rating: { $avg: "$product.reviews.rating" },
+        stoc_disponibil: {
+            $subtract: [
+                { $sum: "$product.inventory.stock_level" },
+                { $sum: "$product.inventory.reserved_quantity" }
+            ]
+        }
+    }},
+    { $addFields: {
+        clasificare: {
+            $cond: {
+                if: { $and: [
+                    { $gte: ["$avg_rating", 4.5] },
+                    { $gte: ["$valoare_vanduta", 500.0] }
+                ]},
+                then: "premium",
+                else: {
+                    $cond: {
+                        if: { $or: [
+                            { $gte: ["$avg_rating", 3.5] },
+                            { $gte: ["$valoare_vanduta", 200.0] }
+                        ]},
+                        then: "standard",
+                        else: "slab"
+                    }
+                }
+            }
+        }
+    }},
+    { $sort: { clasificare: 1, valoare_vanduta: -1}},
+    { $project: 
         {
-            "customer.email":1,
-            dif_discount:1,
-            _id:0
+            _id: 0,
+            title: 1,
+            valoare_vanduta: 1,
+            avg_rating: 1,
+            stoc_disponibil: 1,
+            clasificare: 1
         }
     }
 ]);
 
-// 4. Cate produse "fantoma" sunt ?
-//fantoma = produsele care nu au fost adaugate niciodata
-//in niciun cart
-use('big_data_db');
-db.products_catalog.aggregate([
-    { $lookup:
-        {
-            from: "orders",
-            localField: "title",
-            foreignField: "items.product_name",
-            as: "pc_o"
-        }
-    },
-    { $match:
-        {
-            pc_o: { $size: 0}
-        }
-    },
-    { $project:
-        {
-            title:1
-        }
-    }
-]);
+
+//-- Trecem la ceva mai dificil 
+//-- 3. Pentru fiecare comanda cu status (paid, shipped, delivered) calculam in felul urmator:
+//--a) cu window functions: cheltuiala cumulativa pana la acea comanda (si inclusiv comanda)
+//--b) procentul pe care il reprezinta comanda curenta din totalul cheltuielilor utilizatorului
+//--c) rangul comenzii ca valoare (rang 1 = cea mai scumpa)
+//--Si returnam doar utilizatorii cu minim 2 comenzi valide
+//--Sortat dupa user, apoi cronologic
+
+
+
+//-- 4. Pentru fiecare oras:
+//--a) valoarea totala a comenzilor livrate din depozitele orasului respectiv
+//--b) valoarea totala o comparam cu media nationala
+//--obtinem ca performanta 2 categorii: peste medie si sub medie
+
