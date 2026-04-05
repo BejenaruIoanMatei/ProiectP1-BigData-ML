@@ -1,71 +1,143 @@
-// 1. Produsul cu numărul maxim de review-uri
-db.products_catalog.aggregate([
-    { $project: { title: 1, nr_review: { $size: { $ifNull: ["$reviews", []] } } } },
-    { $sort: { nr_review: -1 } },
-    { $limit: 1 }
-]);
-
-// ---------------------------------------------------------
-
-// 2. Utilizatori care au cheltuit peste media generală
+// useri peste medie
 db.orders.aggregate([
-    { $group: { _id: "$customer.email", totalSpent: { $sum: "$total_price" } } },
+  { "$group": { 
+      "_id": "$user_id", 
+      "total_spent": { "$sum": "$total" } 
+  }},
+  { "$group": {
+      "_id": null,
+      "avg_spent": { "$avg": "$total_spent" },
+      "all_users": { "$push": { "user_id": "$_id", "total_spent": "$total_spent" } }
+  }},
+  { "$unwind": "$all_users" },
+  { "$match": { 
+      "$expr": { "$gt": [ "$all_users.total_spent", "$avg_spent" ] } 
+  }},
+  { "$lookup": { 
+      "from": "users", 
+      "localField": "all_users.user_id", 
+      "foreignField": "_id", 
+      "as": "user" 
+  }},
+  { "$unwind": "$user" },
+  { "$project": { 
+      "_id": 0, 
+      "first_name": "$user.first_name", 
+      "last_name": "$user.last_name", 
+      "total_spent": "$all_users.total_spent" 
+  }},
+  { "$sort": { "total_spent": -1 } }
+])
 
-    {
-        $group: {
-            _id: null,
-            avgGlobal: { $avg: "$totalSpent" },
-            allUsers: { $push: { email: "$_id", totalSpent: "$totalSpent" } }
-        }
-    },
 
-    { $unwind: "$allUsers" },
-    
-    {
-        $match: {
-            $expr: { $gt: ["$allUsers.totalSpent", "$avgGlobal"] }
-        }
-    },
-    
-    {
-        $project: {
-            _id: 0,
-            email: "$allUsers.email",
-            totalSpent: "$allUsers.totalSpent",
-            mediaGenerala: "$avgGlobal"
-        }
-    },
-    { $sort: { totalSpent: -1 } }
-]);
-
-// ---------------------------------------------------------
-
-db.products_catalog.aggregate([
-    { 
-        $match: { 
-            price: { $gt: 100 },
-            "reviews.rating": 5 
-        } 
-    },
-    { $project: { title: 1, price: 1, _id: 0 } },
-    { $sort: { price: -1 } }
-]);
-
-// ---------------------------------------------------------
+// depozitele in care s-a platit cel mai mult cu cardul 
 db.orders.aggregate([
-    { $unwind: "$items" }, 
-    { 
-        $group: { 
-            _id: "$customer.email", 
-            produse_unice: { $addToSet: "$items.product_id" } 
-        } 
-    },
-    { 
-        $project: { 
-            email: "$_id", 
-            tipuri_produse_unice: { $size: "$produse_unice" } 
-        } 
-    },
-    { $sort: { tipuri_produse_unice: -1 } },
-    { $limit: 5 }
-]);
+  { "$match": { 
+      "payment.method": "card", 
+      "payment.status": "completed" 
+  }},
+  { "$group": { 
+      "_id": "$shipment.warehouse_id", 
+      "total_card_transactions": { "$sum": 1 }, 
+      "total_revenue_from_cards": { "$sum": "$payment.amount" } 
+  }},
+  { "$group": {
+      "_id": null,
+      "max_revenue": { "$max": "$total_revenue_from_cards" },
+      "all_warehouses": { 
+          "$push": { 
+              "warehouse_id": "$_id", 
+              "total_card_transactions": "$total_card_transactions",
+              "total_revenue_from_cards": "$total_revenue_from_cards" 
+          } 
+      }
+  }},
+  { "$unwind": "$all_warehouses" },
+  { "$match": { 
+      "$expr": { "$eq": [ "$all_warehouses.total_revenue_from_cards", "$max_revenue" ] } 
+  }},
+  { "$lookup": { 
+      "from": "warehouses", 
+      "localField": "all_warehouses.warehouse_id", 
+      "foreignField": "_id", 
+      "as": "warehouse_data" 
+  }},
+  { "$unwind": "$warehouse_data" },
+  { "$project": { 
+      "_id": 0, 
+      "warehouse_name": "$warehouse_data.name", 
+      "city": "$warehouse_data.city", 
+      "total_card_transactions": "$all_warehouses.total_card_transactions",
+      "total_revenue_from_cards": "$all_warehouses.total_revenue_from_cards" 
+  }}
+])
+
+//depozitele cu cele mai mari vanzari 
+db.orders.aggregate([
+  { "$match": { 
+      "status": { "$in": ["paid", "shipped", "delivered"] } 
+  }},
+  { "$group": { 
+      "_id": "$shipment.warehouse_id", 
+      "total_successful_orders": { "$sum": 1 }, 
+      "total_sales_volume": { "$sum": "$discounted_total" } 
+  }},
+  { "$group": {
+      "_id": null,
+      "max_sales": { "$max": "$total_sales_volume" },
+      "all_warehouses": { 
+          "$push": { 
+              "warehouse_id": "$_id", 
+              "total_successful_orders": "$total_successful_orders",
+              "total_sales_volume": "$total_sales_volume" 
+          } 
+      }
+  }},
+  { "$unwind": "$all_warehouses" },
+  { "$match": { 
+      "$expr": { "$eq": [ "$all_warehouses.total_sales_volume", "$max_sales" ] } 
+  }},
+  { "$lookup": { 
+      "from": "warehouses", 
+      "localField": "all_warehouses.warehouse_id", 
+      "foreignField": "_id", 
+      "as": "warehouse_data" 
+  }},
+  { "$unwind": "$warehouse_data" },
+  { "$project": { 
+      "_id": 0, 
+      "warehouse_name": "$warehouse_data.name", 
+      "city": "$warehouse_data.city", 
+      "total_successful_orders": "$all_warehouses.total_successful_orders",
+      "total_sales_volume": "$all_warehouses.total_sales_volume" 
+  }}
+])
+
+
+//top 3 tari cu reviewuri 
+db.products.aggregate([
+  { "$unwind": "$reviews" },
+  { "$group": { 
+      "_id": "$reviews.user_pg_id", 
+      "review_count": { "$sum": 1 } 
+  }},
+  { "$lookup": {
+      "from": "users",
+      "localField": "_id",
+      "foreignField": "pg_id",
+      "as": "user_data"
+  }},
+  { "$unwind": "$user_data" },
+  { "$unwind": "$user_data.addresses" },
+  { "$group": {
+      "_id": "$user_data.addresses.country",
+      "total_reviews": { "$sum": "$review_count" }
+  }},
+  { "$sort": { "total_reviews": -1 } },
+  { "$limit": 3 },
+  { "$project": {
+      "_id": 0,
+      "country": "$_id",
+      "total_reviews": 1
+  }}
+])
