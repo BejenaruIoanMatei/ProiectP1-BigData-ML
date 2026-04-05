@@ -1,3 +1,81 @@
+// Top curieri dupa numarul de livrari
+db.orders.aggregate([
+  { $group: {
+      _id: "$shipment.courier_id",
+      nr_livrari: { $sum: 1 }
+  }},
+  { $lookup: {
+      from: "couriers",
+      localField: "_id",
+      foreignField: "_id",
+      as: "curier"
+  }},
+  { $unwind: "$curier" },
+  { $project: {
+      curier: "$curier.full_name",
+      companie: "$curier.company.name",
+      nr_livrari: 1
+  }},
+  { $sort: { nr_livrari: -1 } }
+])
+
+// Evoluția lunară a vânzărilor față de luna anterioară
+db.orders.aggregate([
+  { $group: {
+      _id: { $dateToString: { format: "%Y-%m", date: "$created_at" } },
+      nr_comenzi: { $sum: 1 },
+      venituri: { $sum: "$discounted_total" }
+  }},
+  { $sort: { _id: 1 } },
+  { $setWindowFields: {
+      sortBy: { _id: 1 },
+      output: {
+        venituri_luna_anterioara: {
+          $shift: { output: "$venituri", by: -1 }
+        }
+      }
+  }},
+  { $project: {
+      luna: "$_id",
+      nr_comenzi: 1,
+      venituri: { $round: ["$venituri", 2] },
+      venituri_luna_anterioara: { $round: ["$venituri_luna_anterioara", 2] },
+      diferenta: { $round: [{ $subtract: ["$venituri", "$venituri_luna_anterioara"] }, 2] }
+  }}
+])
+
+// Statusul livrărilor per curier
+db.orders.aggregate([
+  { $unwind: "$shipment.status_history" },
+  { $group: {
+      _id: {
+        courier_id: "$shipment.courier_id",
+        status: "$shipment.status_history.status"
+      },
+      count: { $sum: 1 }
+  }},
+  { $group: {
+      _id: "$_id.courier_id",
+      statusuri: { $push: { status: "$_id.status", count: "$count" } },
+      total: { $sum: "$count" }
+  }},
+  { $lookup: {
+      from: "couriers",
+      localField: "_id",
+      foreignField: "_id",
+      as: "curier"
+  }},
+  { $unwind: "$curier" },
+  { $project: {
+      curier: "$curier.full_name",
+      livrate:     { $sum: { $map: { input: { $filter: { input: "$statusuri", cond: { $eq: ["$$this.status", "delivered"] } } }, in: "$$this.count" } } },
+      in_tranzit:  { $sum: { $map: { input: { $filter: { input: "$statusuri", cond: { $eq: ["$$this.status", "in_transit"] } } }, in: "$$this.count" } } },
+      in_asteptare:{ $sum: { $map: { input: { $filter: { input: "$statusuri", cond: { $eq: ["$$this.status", "pending"] } } }, in: "$$this.count" } } },
+      respinse:    { $sum: { $map: { input: { $filter: { input: "$statusuri", cond: { $eq: ["$$this.status", "rejected"] } } }, in: "$$this.count" } } },
+      total: 1
+  }},
+  { $sort: { livrate: -1 } }
+])
 
 // Top 5 produse dupa pret si rating mediu
 use('big_data_db');
@@ -27,100 +105,4 @@ db.products_catalog.aggregate([
     avg_rating: 1,
     nr_recenzii: 1
   }}
-]);
-
-// Utilizatori cu cele mai multe produse unice cumparate
-use('big_data_db');
-db.orders.aggregate([
-  { $match: {
-    "customer.name": {
-      $ne: "Unknown User"
-    }
-  }},
-  { $unwind: "$items" },
-  { $group: {
-    _id: "$customer.email",
-    name: {
-      $first: "$customer.name"
-    },
-    produse_unice: {
-      $addToSet:
-        "$items.product_name"
-    }
-  }},
-  { $addFields: {
-    nr_produse_unice: {
-      $size: "$produse_unice"
-    }
-  }},
-  { $sort: {
-    nr_produse_unice: -1
-  }},
-  { $limit: 10 },
-  { $project: {
-    _id: 0,
-    name: 1,
-    email: "$_id",
-    nr_produse_unice: 1
-  }}
-]);
-
-// Recenzenti nemultumiti (rating ≤ 2)
-use('big_data_db');
-db.products_catalog.aggregate([
-  { $unwind: "$reviews" },
-  { $match: {
-    "reviews.rating": {
-      $lte: 2
-    }
-  }},
-  { $sort: {
-    "reviews.rating": 1
-  }},
-  { $project: {
-    _id: 0,
-    produs: "$title",
-    recenzent: "$reviews.user",
-    rating: "$reviews.rating",
-    comentariu: "$reviews.comment"
-  }}
-]);
-
-// Clienti inactivi (fara niciun cart)
-use('big_data_db');
-db.products_catalog.aggregate([
-    { $lookup: {
-        from: "orders",
-        localField: "title",
-        foreignField: "items.product_name",
-        as: "comenzi"
-    }},
-    { $match: {
-        comenzi: { $size: 0 }
-    }},
-    { $project: {
-        _id: 0,
-        title: 1,
-        price: 1
-    }}
-]);
-
-// Care sunt cele mai "vânate" produse?
-use('big_data_db');
-db.orders.aggregate([
-    { $unwind: "$items" },
-    { $group: {
-        _id: "$items.product_name", 
-        total_unitati_vandute: { $sum: "$items.quantity" },
-        venit_total_produs: { $sum: { $multiply: ["$items.quantity", "$items.unit_price"] } },
-        numar_aparitii_in_carturi: { $sum: 1 }
-    }},
-    { $sort: { total_unitati_vandute: -1 } },
-    { $limit: 5 },
-    { $project: {
-        _id: 0,
-        produs: "$_id",
-        total_unitati_vandute: 1,
-        venit_generat: { $round: ["$venit_total_produs", 2] }
-    }}
 ]);
