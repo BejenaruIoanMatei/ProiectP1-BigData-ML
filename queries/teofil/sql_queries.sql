@@ -1,11 +1,3 @@
-
--------- nr maxim de reviews ---
-SELECT product_id, COUNT(*) AS nr_review 
-FROM dev.reviews 
-GROUP BY product_id 
-ORDER BY nr_review DESC 
-LIMIT 1;
-
 ---- nr de useri care au cheltuit peste medie---
 WITH UserTotals AS (
     SELECT user_id, SUM(total) as total_spent
@@ -21,22 +13,87 @@ JOIN UserTotals ut ON u.id = ut.user_id
 WHERE ut.total_spent > (SELECT AVG(total_spent) FROM UserTotals)
 ORDER BY ut.total_spent DESC;
 
----produse cu pret > 100 si rating 5 
-SELECT DISTINCT 
-    p.title, 
-    p.price
-FROM dev.products p
-JOIN dev.reviews r ON p.id = r.product_id
-WHERE p.price > 100 AND r.rating = 5
-ORDER BY p.price DESC;
+--- depozitele in care s-a platit cel mai mult cu cardul --- 
+WITH WarehouseCardRevenue AS (
+    SELECT 
+        w.name AS warehouse_name,
+        w.city,
+        COUNT(p.id) AS total_card_transactions,
+        SUM(p.amount) AS total_revenue_from_cards
+    FROM dev.warehouses w
+    INNER JOIN dev.shipments s ON w.id = s.origin_warehouse_id
+    INNER JOIN dev.orders o ON s.order_id = o.id
+    INNER JOIN dev.payments p ON o.id = p.order_id
+    WHERE p.method = 'card' 
+      AND p.status = 'completed'
+    GROUP BY 
+        w.id, w.name, w.city
+),
+RankedWarehouses AS (
+    SELECT 
+        *,
+        RANK() OVER (ORDER BY total_revenue_from_cards DESC) AS revenue_rank
+    FROM WarehouseCardRevenue
+)
 
---- utilizatori care au cumparat cele mai multe produse unice (top 5)
 SELECT 
-    u.email, 
-    COUNT(DISTINCT ci.product_id) as tipuri_produse_unice
-FROM dev.users u
-JOIN dev.carts c ON u.id = c.user_id
-JOIN dev.cart_items ci ON c.id = ci.cart_id
-GROUP BY u.email
-ORDER BY tipuri_produse_unice DESC
-LIMIT 5;
+    warehouse_name,
+    city,
+    total_card_transactions,
+    total_revenue_from_cards
+FROM RankedWarehouses
+WHERE revenue_rank = 1;
+
+--- depozitele cu cele mai mari vanzari --- 
+WITH WarehouseSales AS (
+    SELECT 
+        w.name AS warehouse_name,
+        w.city,
+        COUNT(DISTINCT o.id) AS total_successful_orders,
+        SUM(o.discounted_total) AS total_sales_volume
+    FROM dev.warehouses w
+    INNER JOIN dev.shipments s ON w.id = s.origin_warehouse_id
+    INNER JOIN dev.orders o ON s.order_id = o.id
+    WHERE o.status IN ('paid', 'shipped', 'delivered')
+    GROUP BY 
+        w.id, w.name, w.city
+),
+RankedSales AS (
+    SELECT 
+        *,
+        RANK() OVER (ORDER BY total_sales_volume DESC) AS sales_rank
+    FROM WarehouseSales
+)
+SELECT 
+    warehouse_name,
+    city,
+    total_successful_orders,
+    total_sales_volume
+FROM RankedSales
+WHERE sales_rank = 1;
+
+--- top 3 tari cu cele mai multe reviewuri --- 
+
+WITH CountryReviewCounts AS (
+    SELECT 
+        a.country,
+        COUNT(r.id) AS total_reviews
+    FROM dev.reviews r
+    INNER JOIN dev.users u ON r.user_id = u.id
+    INNER JOIN dev.addresses a ON u.id = a.user_id
+    GROUP BY 
+        a.country
+),
+RankedCountries AS (
+    SELECT 
+        country,
+        total_reviews,
+        DENSE_RANK() OVER (ORDER BY total_reviews DESC) AS rank_position
+    FROM CountryReviewCounts
+)
+SELECT 
+    country,
+    total_reviews,
+    rank_position
+FROM RankedCountries
+WHERE rank_position <= 3;
