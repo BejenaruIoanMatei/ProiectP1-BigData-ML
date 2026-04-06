@@ -30,31 +30,30 @@ db.orders.aggregate([
 ])
 
 
-// depozitele in care s-a platit cel mai mult cu cardul 
+// depozitele in care s-a platit cel mai mult cu cash 
 db.orders.aggregate([
   { "$match": { 
-      "payment.method": "card", 
-      "payment.status": "completed" 
+      "status": { "$in": ["paid", "shipped", "delivered"] } 
   }},
   { "$group": { 
       "_id": "$shipment.warehouse_id", 
-      "total_card_transactions": { "$sum": 1 }, 
-      "total_revenue_from_cards": { "$sum": "$payment.amount" } 
+      "total_successful_orders": { "$sum": 1 }, 
+      "total_sales_volume": { "$sum": "$discounted_total" } 
   }},
   { "$group": {
       "_id": null,
-      "max_revenue": { "$max": "$total_revenue_from_cards" },
+      "max_sales": { "$max": "$total_sales_volume" },
       "all_warehouses": { 
           "$push": { 
               "warehouse_id": "$_id", 
-              "total_card_transactions": "$total_card_transactions",
-              "total_revenue_from_cards": "$total_revenue_from_cards" 
+              "total_successful_orders": "$total_successful_orders",
+              "total_sales_volume": "$total_sales_volume" 
           } 
       }
   }},
   { "$unwind": "$all_warehouses" },
   { "$match": { 
-      "$expr": { "$eq": [ "$all_warehouses.total_revenue_from_cards", "$max_revenue" ] } 
+      "$expr": { "$eq": [ "$all_warehouses.total_sales_volume", "$max_sales" ] } 
   }},
   { "$lookup": { 
       "from": "warehouses", 
@@ -67,12 +66,12 @@ db.orders.aggregate([
       "_id": 0, 
       "warehouse_name": "$warehouse_data.name", 
       "city": "$warehouse_data.city", 
-      "total_card_transactions": "$all_warehouses.total_card_transactions",
-      "total_revenue_from_cards": "$all_warehouses.total_revenue_from_cards" 
+      "total_successful_orders": "$all_warehouses.total_successful_orders",
+      "total_sales_volume": "$all_warehouses.total_sales_volume" 
   }}
 ])
 
-//depozitele cu cele mai mari vanzari 
+/// depozitele cu cele mai mari vanzari
 db.orders.aggregate([
   { "$match": { 
       "status": { "$in": ["paid", "shipped", "delivered"] } 
@@ -114,30 +113,30 @@ db.orders.aggregate([
 ])
 
 
-//top 3 tari cu reviewuri 
+//top 3 orase cu reviewuri 
 db.products.aggregate([
   { "$unwind": "$reviews" },
   { "$group": { 
-      "_id": "$reviews.user_pg_id", 
+      "_id": "$reviews.user_id", 
       "review_count": { "$sum": 1 } 
   }},
   { "$lookup": {
       "from": "users",
       "localField": "_id",
-      "foreignField": "pg_id",
+      "foreignField": "_id",
       "as": "user_data"
   }},
   { "$unwind": "$user_data" },
   { "$unwind": "$user_data.addresses" },
   { "$group": {
-      "_id": "$user_data.addresses.country",
+      "_id": "$user_data.addresses.city",
       "total_reviews": { "$sum": "$review_count" }
   }},
   { "$sort": { "total_reviews": -1 } },
   { "$limit": 3 },
   { "$project": {
       "_id": 0,
-      "country": "$_id",
+      "city": "$_id",
       "total_reviews": 1
   }}
 ])
