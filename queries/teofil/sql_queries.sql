@@ -1,7 +1,7 @@
 ---- nr de useri care au cheltuit peste medie---
 WITH UserTotals AS (
     SELECT user_id, SUM(total) as total_spent
-    FROM dev.carts
+    FROM dev.orders
     GROUP BY user_id
 )
 SELECT 
@@ -13,7 +13,7 @@ JOIN UserTotals ut ON u.id = ut.user_id
 WHERE ut.total_spent > (SELECT AVG(total_spent) FROM UserTotals)
 ORDER BY ut.total_spent DESC;
 
---- depozitele in care s-a platit cel mai mult cu cardul --- 
+--- depozitele in care s-a platit cel mai mult cu cash --- 
 WITH WarehouseCardRevenue AS (
     SELECT 
         w.name AS warehouse_name,
@@ -24,7 +24,7 @@ WITH WarehouseCardRevenue AS (
     INNER JOIN dev.shipments s ON w.id = s.origin_warehouse_id
     INNER JOIN dev.orders o ON s.order_id = o.id
     INNER JOIN dev.payments p ON o.id = p.order_id
-    WHERE p.method = 'card' 
+    WHERE p.method = 'cash' 
       AND p.status = 'completed'
     GROUP BY 
         w.id, w.name, w.city
@@ -72,28 +72,29 @@ SELECT
 FROM RankedSales
 WHERE sales_rank = 1;
 
---- top 3 tari cu cele mai multe reviewuri --- 
+--- top 3 orase cu cele mai multe reviewuri --- 
 
 WITH CountryReviewCounts AS (
     SELECT 
-        a.country,
+        a.city,
         COUNT(r.id) AS total_reviews
     FROM dev.reviews r
     INNER JOIN dev.users u ON r.user_id = u.id
     INNER JOIN dev.addresses a ON u.id = a.user_id
     GROUP BY 
-        a.country
+        a.city
 ),
 RankedCountries AS (
     SELECT 
-        country,
+        city,
         total_reviews,
         DENSE_RANK() OVER (ORDER BY total_reviews DESC) AS rank_position
     FROM CountryReviewCounts
 )
 SELECT 
-    country,
+    city,
     total_reviews,
     rank_position
 FROM RankedCountries
 WHERE rank_position <= 3;
+
