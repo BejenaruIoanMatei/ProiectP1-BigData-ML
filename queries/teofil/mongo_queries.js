@@ -33,27 +33,28 @@ db.orders.aggregate([
 // depozitele in care s-a platit cel mai mult cu cash 
 db.orders.aggregate([
   { "$match": { 
-      "status": { "$in": ["paid", "shipped", "delivered"] } 
+      "payment.method": "cash", 
+      "payment.status": "completed" 
   }},
   { "$group": { 
       "_id": "$shipment.warehouse_id", 
-      "total_successful_orders": { "$sum": 1 }, 
-      "total_sales_volume": { "$sum": "$discounted_total" } 
+      "total_cash_transactions": { "$sum": 1 }, 
+      "total_revenue_from_cash": { "$sum": "$payment.amount" } 
   }},
   { "$group": {
       "_id": null,
-      "max_sales": { "$max": "$total_sales_volume" },
+      "max_revenue": { "$max": "$total_revenue_from_cash" },
       "all_warehouses": { 
           "$push": { 
               "warehouse_id": "$_id", 
-              "total_successful_orders": "$total_successful_orders",
-              "total_sales_volume": "$total_sales_volume" 
+              "total_cash_transactions": "$total_cash_transactions",
+              "total_revenue_from_cash": "$total_revenue_from_cash" 
           } 
       }
   }},
   { "$unwind": "$all_warehouses" },
   { "$match": { 
-      "$expr": { "$eq": [ "$all_warehouses.total_sales_volume", "$max_sales" ] } 
+      "$expr": { "$eq": [ "$all_warehouses.total_revenue_from_cash", "$max_revenue" ] } 
   }},
   { "$lookup": { 
       "from": "warehouses", 
@@ -66,8 +67,8 @@ db.orders.aggregate([
       "_id": 0, 
       "warehouse_name": "$warehouse_data.name", 
       "city": "$warehouse_data.city", 
-      "total_successful_orders": "$all_warehouses.total_successful_orders",
-      "total_sales_volume": "$all_warehouses.total_sales_volume" 
+      "total_cash_transactions": "$all_warehouses.total_cash_transactions",
+      "total_revenue_from_cash": "$all_warehouses.total_revenue_from_cash" 
   }}
 ])
 
@@ -117,7 +118,7 @@ db.orders.aggregate([
 db.products.aggregate([
   { "$unwind": "$reviews" },
   { "$group": { 
-      "_id": "$reviews.user_id", 
+      "_id": "$reviews.user_pg_id", 
       "review_count": { "$sum": 1 } 
   }},
   { "$lookup": {
