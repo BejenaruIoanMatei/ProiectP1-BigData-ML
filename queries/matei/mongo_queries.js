@@ -139,6 +139,66 @@ db.orders.aggregate([
 //    }
 //]);
 
+//db.orders.aggregate([
+//    { $lookup:
+//        {
+//            from: "users",
+//            localField: "user_id",
+//            foreignField: "_id",
+//            as: "user"
+//        }
+//    },
+//    { $unwind: "$user"},
+//    { $match: 
+//        {
+//            status: { $in: ['paid', 'shipped', 'delivered']},
+//            "user.first_name": { $ne: "Unknown"}
+//        }
+//    },
+//    { $group:
+//        {
+//            _id: "$user_id",
+//            first_name: { $first: "$user.first_name"},
+//            last_name: { $first: "$user.last_name"},
+//            total_user: { $sum: "$discounted_total"},
+//            nr_comenzi: { $sum: 1},
+//            comenzi: { $push: 
+//                {
+//                    order_id: "$_id",
+//                    val: "$discounted_total",
+//                    created_at: "$created_at"
+//                }
+//            }
+//        }
+//    },
+//    { $match:
+//        {
+//            nr_comenzi: { $gte: 2}
+//        }
+//    },
+//    { $addFields: {
+//        comenzi: { $sortArray: { input: "$comenzi", sortBy: { created_at: 1 } } }
+//    }},
+//    { $addFields:
+//        {
+//            rezultat: {
+//                $reduce: {
+//                    input: "$comenzi",
+//                    initialValue: { cumul: 0, rows: []},
+//                    in: {
+//                        cumul: {$add: ["$$value.cumul", "$$this.val"]},
+//                        rows: { $concatArrays: ["$$value.rows", [{
+//                            order_id: "$$this.order_id",
+//                            created_at: "$$this.created_at",
+//                            val: "$$this.val",
+//                            cumul: { $add: ["$$value.cumul", "$$this.val"]}
+//                        }]]}
+//                    }
+//                }
+//            }
+//        }
+//    }]);
+
 db.orders.aggregate([
     { $lookup:
         {
@@ -173,7 +233,7 @@ db.orders.aggregate([
     },
     { $match:
         {
-            nr_comenzi: { $gte: 1}
+            nr_comenzi: { $gte: 2}
         }
     },
     { $addFields: {
@@ -197,6 +257,9 @@ db.orders.aggregate([
                 }
             }
         }
+        // Echivalentul intr-un limbaj OOP ar fi
+        //for (Comanda comandaCurenta : comenzi) {}
+        // for i in comenzi 
     },
     { $unwind: "$rezultat.rows"},
     { $project: 
@@ -222,13 +285,11 @@ db.orders.aggregate([
 //--obtinem ca performanta 2 categorii: peste medie si sub medie
 
 db.orders.aggregate([
-
   { $match: 
       { 
           status: "delivered" 
       } 
   },
-
   { $group: 
       {
           _id: "$shipment.warehouse_id",
@@ -236,7 +297,6 @@ db.orders.aggregate([
           val_depozit:{ $sum: "$discounted_total"}
       }
   },
-
   { $lookup: 
       {
           from: "warehouses",
