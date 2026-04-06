@@ -124,7 +124,7 @@ db.products.aggregate([
   { "$lookup": {
       "from": "users",
       "localField": "_id",
-      "foreignField": "_id",
+      "foreignField": "pg_id",
       "as": "user_data"
   }},
   { "$unwind": "$user_data" },
