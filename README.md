@@ -9,7 +9,7 @@ Proiect end-to-end de inginerie a datelor care implementează un pipeline ETL co
 
 ```
 [API Extern + Mock Data] ──► [PostgreSQL - Staging] ──► [Python Migration Script] ──► [MongoDB]
-                      (15 tabele)                                          (6 colecții)
+                      (16 tabele)                                          (6 colecții)
 ```
 
 1. **Extraction** — scripturi Python extrag date reale din API-ul public `dummyjson.com` (users, products, carts, reviews) și generează date mock realiste pentru restul domeniului (adrese, comenzi, plăți, curierat, depozite, stocuri, livrări).
@@ -20,7 +20,7 @@ Proiect end-to-end de inginerie a datelor care implementează un pipeline ETL co
 
 ## Modelarea datelor
 
-### PostgreSQL — schema relațională (15 tabele)
+### PostgreSQL — schema relațională (16 tabele)
 
 Schema acoperă trei domenii funcționale:
 
