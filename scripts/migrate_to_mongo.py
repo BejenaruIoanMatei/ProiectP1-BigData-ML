@@ -97,7 +97,6 @@ def migrate_products(cur, db, warehouse_id_map):
     id_map = {}
 
     for p in products:
-        # reviews
         reviews = fetchall_as_dicts(cur, """
             SELECT r.rating, r.comment, r.date,
                    u.id AS user_pg_id
@@ -115,8 +114,6 @@ def migrate_products(cur, db, warehouse_id_map):
             }
             for r in reviews
         ]
-
-        # inventory per warehouse
         inventory = fetchall_as_dicts(cur, """
             SELECT warehouse_id, stock_level, reserved_quantity, min_stock_level
             FROM inventory
@@ -241,7 +238,6 @@ def migrate_orders(cur, db, user_id_map, cart_id_map, product_id_map,
     """)
 
     for o in orders:
-        # order items
         items = fetchall_as_dicts(cur, """
             SELECT oi.id AS oi_pg_id, oi.product_id, oi.quantity, oi.price, p.title
             FROM order_items oi
@@ -249,7 +245,6 @@ def migrate_orders(cur, db, user_id_map, cart_id_map, product_id_map,
             WHERE oi.order_id = %s
         """, (o["id"],))
 
-        # order_item_id → index in lista de items (pentru shipment_items)
         oi_index_map = {item["oi_pg_id"]: idx for idx, item in enumerate(items)}
 
         items_list = [
@@ -262,7 +257,6 @@ def migrate_orders(cur, db, user_id_map, cart_id_map, product_id_map,
             for i in items
         ]
 
-        # payment (embedded singular)
         payments = fetchall_as_dicts(cur, """
             SELECT amount, method, transaction_id, status, paid_at
             FROM payments
@@ -281,7 +275,6 @@ def migrate_orders(cur, db, user_id_map, cart_id_map, product_id_map,
                 "paid_at": pay["paid_at"],
             }
 
-        # shipment (embedded singular)
         shipments = fetchall_as_dicts(cur, """
             SELECT id, courier_id, origin_warehouse_id, tracking_number, created_at
             FROM shipments
