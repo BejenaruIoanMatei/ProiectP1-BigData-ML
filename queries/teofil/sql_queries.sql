@@ -98,3 +98,23 @@ SELECT
 FROM RankedCountries
 WHERE rank_position <= 3;
 
+--- useri care au cheltuit peste user 1 ---
+--- interogare suplimentara --- 
+WITH UserTotals AS (
+    SELECT user_id, SUM(total) as total_spent
+    FROM dev.orders
+    GROUP BY user_id
+),
+UserOneTotal AS (
+    SELECT total_spent
+    FROM UserTotals
+    WHERE user_id = 1
+)
+SELECT 
+    u.first_name, 
+    u.last_name, 
+    ut.total_spent
+FROM dev.users u
+JOIN UserTotals ut ON u.id = ut.user_id
+WHERE ut.total_spent > (SELECT total_spent FROM UserOneTotal)
+ORDER BY ut.total_spent DESC;
