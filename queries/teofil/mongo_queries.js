@@ -141,3 +141,44 @@ db.products.aggregate([
       "total_reviews": 1
   }}
 ])
+
+///interogare suplimentara, useri care au cheltuit peste userul cu id 1
+db.orders.aggregate([
+  { "$group": { 
+      "_id": "$user_id", 
+      "total_spent": { "$sum": "$total" } 
+  }},
+  { "$group": {
+      "_id": null,
+      "all_users": { "$push": { "user_id": "$_id", "total_spent": "$total_spent" } }
+  }},
+  { "$addFields": {
+      "user_one": {
+          "$filter": {
+              "input": "$all_users",
+              "as": "u",
+              "cond": { "$eq": ["$$u.user_id", 1] }
+          }
+      }
+  }},
+  { "$addFields": {
+      "user_one_spent": { "$arrayElemAt": ["$user_one.total_spent", 0] }
+  }},
+  { "$unwind": "$all_users" },
+  { "$match": { 
+      "$expr": { "$gt": [ "$all_users.total_spent", "$user_one_spent" ] } 
+  }},
+  { "$lookup": { 
+      "from": "users", 
+      "localField": "all_users.user_id", 
+      "foreignField": "_id", 
+      "as": "user" 
+  }},
+  { "$unwind": "$user" },
+  { "$project": { 
+      "_id": 0, 
+      "first_name": "$user.first_name", 
+      "last_name": "$user.last_name", 
+      "total_spent": "$all_users.total_spent" 
+  }}
+])
